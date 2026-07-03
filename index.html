@@ -1,0 +1,1243 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>RiskDesk — Futures Account Engine</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+<style>
+  :root{
+    --bg:#0A0D11; --panel:#11151B; --panel-2:#161B22; --border:#232A33; --border-soft:#1B2129;
+    --text:#E7EAEE; --text-dim:#8B94A3; --text-faint:#5A6472;
+    --green:#3FB68B; --green-dim:#1F3B32; --red:#E5484D; --red-dim:#3B1F21;
+    --amber:#E8A23D; --amber-dim:#3B301C; --blue:#4C8DFF; --blue-dim:#182640;
+    --font-display:'Space Grotesk',sans-serif; --font-body:'Inter',sans-serif; --font-mono:'IBM Plex Mono',monospace;
+  }
+  *{box-sizing:border-box; margin:0; padding:0;}
+  html,body{height:100%;}
+  body{
+    background:var(--bg); color:var(--text); font-family:var(--font-body); font-size:14px; -webkit-font-smoothing:antialiased;
+    background-image:linear-gradient(var(--border-soft) 1px, transparent 1px), linear-gradient(90deg, var(--border-soft) 1px, transparent 1px);
+    background-size:64px 64px; background-attachment:fixed;
+  }
+  .app{display:flex; min-height:100vh;}
+  ::selection{background:var(--blue-dim); color:var(--text);}
+  input:focus, select:focus, button:focus-visible{outline:2px solid var(--blue); outline-offset:1px;}
+
+  .sidebar{width:220px; flex-shrink:0; background:var(--panel); border-right:1px solid var(--border); display:flex; flex-direction:column; position:sticky; top:0; height:100vh;}
+  .brand{padding:22px 20px 18px; border-bottom:1px solid var(--border);}
+  .brand-mark{font-family:var(--font-display); font-weight:700; font-size:17px;}
+  .brand-mark span{color:var(--green);}
+  .brand-sub{font-family:var(--font-mono); font-size:10px; color:var(--text-faint); letter-spacing:.08em; margin-top:4px; text-transform:uppercase;}
+  .nav{padding:14px 12px; display:flex; flex-direction:column; gap:2px;}
+  .nav-item{display:flex; align-items:center; gap:10px; padding:10px 12px; border-radius:6px; color:var(--text-dim); font-size:13px; font-weight:500; cursor:pointer; border:1px solid transparent;}
+  .nav-item .idx{font-family:var(--font-mono); font-size:10px; color:var(--text-faint); width:14px;}
+  .nav-item:hover{background:var(--panel-2); color:var(--text);}
+  .nav-item.active{background:var(--panel-2); color:var(--text); border-color:var(--border);}
+  .nav-item.active .idx{color:var(--green);}
+  .sidebar-foot{margin-top:auto; padding:16px 20px; border-top:1px solid var(--border);}
+  .live-dot{display:inline-block; width:6px; height:6px; border-radius:50%; background:var(--green); margin-right:6px; box-shadow:0 0 6px var(--green);}
+  .foot-label{font-family:var(--font-mono); font-size:10px; color:var(--text-faint); letter-spacing:.06em;}
+  .storage-note{font-family:var(--font-mono); font-size:9.5px; color:var(--text-faint); margin-top:8px; line-height:1.5;}
+
+  .main{flex:1; min-width:0; padding:28px 36px 60px; max-width:1240px;}
+  .topbar{display:flex; align-items:baseline; justify-content:space-between; margin-bottom:22px; flex-wrap:wrap; gap:10px;}
+  .page-title{font-family:var(--font-display); font-size:22px; font-weight:700;}
+  .page-sub{color:var(--text-dim); font-size:12.5px; margin-top:4px;}
+  .acct-switch{font-family:var(--font-mono); font-size:12px; color:var(--text); background:var(--panel); border:1px solid var(--border); border-radius:20px; padding:8px 14px; cursor:pointer;}
+
+  .stat-strip{display:grid; grid-template-columns:repeat(4,1fr); gap:1px; background:var(--border); border:1px solid var(--border); border-radius:10px; overflow:hidden; margin-bottom:24px;}
+  .stat{background:var(--panel); padding:16px 18px;}
+  .stat-label{font-family:var(--font-mono); font-size:10px; color:var(--text-faint); text-transform:uppercase; letter-spacing:.07em; margin-bottom:8px;}
+  .stat-value{font-family:var(--font-mono); font-size:20px; font-weight:600; font-variant-numeric:tabular-nums;}
+  .stat-value.pos{color:var(--green);} .stat-value.neg{color:var(--red);}
+  .stat-sub{font-family:var(--font-mono); font-size:11px; color:var(--text-dim); margin-top:4px;}
+
+  .panel{background:var(--panel); border:1px solid var(--border); border-radius:10px; padding:22px; margin-bottom:20px;}
+  .panel-head{display:flex; align-items:center; justify-content:space-between; margin-bottom:16px; gap:10px; flex-wrap:wrap;}
+  .panel-title{font-family:var(--font-display); font-size:14px; font-weight:600;}
+  .panel-title .n{color:var(--text-faint); font-family:var(--font-mono); font-weight:500; margin-right:8px;}
+  .panel-note{color:var(--text-faint); font-size:11.5px;}
+
+  .grid2{display:grid; grid-template-columns:1fr 1fr; gap:16px;}
+  .grid3{display:grid; grid-template-columns:1fr 1fr 1fr; gap:16px;}
+  @media(max-width:760px){.grid2,.grid3{grid-template-columns:1fr;} .stat-strip{grid-template-columns:repeat(2,1fr);}}
+
+  label{display:block; font-size:11.5px; color:var(--text-dim); margin-bottom:6px; font-weight:500;}
+  select, input[type=text], input[type=number], input[type=time]{width:100%; background:var(--panel-2); border:1px solid var(--border); color:var(--text); border-radius:6px; padding:10px 12px; font-family:var(--font-mono); font-size:13px;}
+  select{cursor:pointer; appearance:none; background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='10' height='6'><path d='M0 0l5 6 5-6z' fill='%238B94A3'/></svg>"); background-repeat:no-repeat; background-position:right 12px center; padding-right:30px;}
+  .field{margin-bottom:14px;}
+  .toggle-group{display:flex; border:1px solid var(--border); border-radius:6px; overflow:hidden;}
+  .toggle-opt{flex:1; text-align:center; padding:9px 10px; font-size:12px; font-weight:500; color:var(--text-dim); cursor:pointer; background:var(--panel-2);}
+  .toggle-opt.active{background:var(--blue-dim); color:var(--blue);}
+
+  button{font-family:var(--font-body); font-weight:600; font-size:13px; cursor:pointer; border-radius:6px; border:1px solid transparent; padding:11px 18px;}
+  .btn-primary{background:var(--green); color:#08130F; border-color:var(--green);}
+  .btn-primary:hover{filter:brightness(1.08);}
+  .btn-primary:disabled{background:var(--panel-2); color:var(--text-faint); border-color:var(--border); cursor:not-allowed;}
+  .btn-ghost{background:transparent; border-color:var(--border); color:var(--text-dim); padding:8px 14px; font-size:12px;}
+  .btn-ghost:hover{color:var(--text); border-color:var(--text-faint);}
+  .btn-danger{background:transparent; border-color:var(--red-dim); color:var(--red); padding:8px 14px; font-size:12px;}
+  .btn-danger:hover{background:var(--red-dim);}
+  .btn-row{display:flex; gap:10px; margin-top:18px; flex-wrap:wrap;}
+
+  .rule-table{width:100%; border-collapse:collapse; margin-top:4px;}
+  .rule-table td{padding:9px 4px; border-bottom:1px solid var(--border-soft); font-size:12.5px;}
+  .rule-table td.k{color:var(--text-dim); width:50%;}
+  .rule-table input{padding:6px 10px; font-size:12.5px;}
+
+  .result-panel{background:var(--panel-2); border:1px solid var(--border); border-radius:10px; padding:20px;}
+  .result-hero{text-align:center; padding:14px 0 18px; border-bottom:1px solid var(--border-soft); margin-bottom:16px;}
+  .result-hero .n{font-family:var(--font-mono); font-size:38px; font-weight:700; font-variant-numeric:tabular-nums; line-height:1;}
+  .result-hero .l{font-family:var(--font-mono); font-size:10px; color:var(--text-faint); text-transform:uppercase; letter-spacing:.08em; margin-top:8px;}
+  .result-line{display:flex; justify-content:space-between; padding:8px 0; border-bottom:1px solid var(--border-soft); font-size:12.5px;}
+  .result-line:last-child{border-bottom:none;}
+  .result-line .k{color:var(--text-dim);}
+  .result-line .v{font-family:var(--font-mono); font-weight:600; font-variant-numeric:tabular-nums;}
+  .warn-box{margin-top:14px; padding:11px 13px; border-radius:7px; font-size:12px; font-family:var(--font-mono); border:1px solid; display:flex; gap:8px; align-items:flex-start;}
+  .warn-box.bad{background:var(--red-dim); border-color:#4a2427; color:#F5A3A6;}
+  .warn-box.ok{background:var(--green-dim); border-color:#234a3c; color:#8fdcbd;}
+  .warn-box.warn{background:var(--amber-dim); border-color:#4a3a1e; color:#f0c684;}
+
+  .meter{margin-bottom:16px;}
+  .meter-top{display:flex; justify-content:space-between; align-items:baseline; margin-bottom:7px;}
+  .meter-label{font-size:12px; font-weight:500; color:var(--text-dim);}
+  .meter-value{font-family:var(--font-mono); font-size:12px; font-weight:600;}
+  .meter-track{position:relative; height:14px; background:var(--panel-2); border-radius:3px; border:1px solid var(--border); overflow:hidden; display:flex;}
+  .meter-tick{flex:1; border-right:1px solid var(--bg);}
+  .meter-tick:last-child{border-right:none;}
+  .meter-fill{position:absolute; top:0; left:0; bottom:0; border-radius:2px; transition:width .3s ease;}
+  .meter-fill.green{background:linear-gradient(90deg,#2a8c68,var(--green));}
+  .meter-fill.red{background:linear-gradient(90deg,#a33338,var(--red));}
+  .meter-fill.amber{background:linear-gradient(90deg,#b57c26,var(--amber));}
+  .meter-fill.blue{background:linear-gradient(90deg,#2f5fb0,var(--blue));}
+
+  .dot-row{display:flex; gap:6px; align-items:center;}
+  .dot{width:11px; height:11px; border-radius:50%; border:1.5px solid var(--border);}
+  .dot.filled{background:var(--green); border-color:var(--green);}
+
+  .status-list{display:flex; flex-direction:column; gap:10px;}
+  .status-item{display:flex; align-items:center; gap:10px; font-size:12.5px;}
+  .status-icon{width:16px; height:16px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:10px; flex-shrink:0; font-weight:700;}
+  .status-icon.ok{background:var(--green-dim); color:var(--green);}
+  .status-icon.bad{background:var(--red-dim); color:var(--red);}
+
+  table.log{width:100%; border-collapse:collapse;}
+  table.log th{text-align:left; font-family:var(--font-mono); font-size:10px; color:var(--text-faint); text-transform:uppercase; letter-spacing:.06em; padding:8px 10px; border-bottom:1px solid var(--border); white-space:nowrap;}
+  table.log td{padding:10px 10px; border-bottom:1px solid var(--border-soft); font-size:12.5px; font-family:var(--font-mono); white-space:nowrap;}
+  table.log tr:hover{background:var(--panel-2);}
+  .tag{display:inline-block; padding:2px 8px; border-radius:4px; font-size:10.5px; font-weight:600; font-family:var(--font-mono);}
+  .tag.long{background:var(--green-dim); color:var(--green);}
+  .tag.short{background:var(--red-dim); color:var(--red);}
+  .del-btn{background:transparent; border:none; color:var(--text-faint); font-size:15px; padding:2px 6px;}
+  .del-btn:hover{color:var(--red);}
+  .exp-btn{background:transparent; border:1px solid var(--border); color:var(--text-dim); font-size:11px; padding:4px 9px; border-radius:5px;}
+  .exp-btn:hover{color:var(--text); border-color:var(--text-faint);}
+  .empty-state{text-align:center; padding:40px 20px; color:var(--text-faint);}
+  .empty-state .big{font-family:var(--font-mono); font-size:12px; margin-bottom:6px;}
+  .detail-row td{background:var(--panel-2); white-space:normal; font-family:var(--font-body);}
+  .detail-grid{display:grid; grid-template-columns:1fr 1fr 1fr; gap:16px; padding:6px 4px;}
+  .detail-block-title{font-family:var(--font-mono); font-size:10px; color:var(--text-faint); text-transform:uppercase; letter-spacing:.06em; margin-bottom:8px;}
+
+  .tab-content{display:none;}
+  .tab-content.active{display:block;}
+  .save-flash{font-family:var(--font-mono); font-size:11px; color:var(--green); opacity:0; transition:opacity .3s;}
+  .save-flash.show{opacity:1;}
+
+  .chip-row{display:flex; gap:8px; flex-wrap:wrap;}
+  .chip{font-family:var(--font-mono); font-size:11.5px; padding:7px 13px; border-radius:20px; border:1px solid var(--border); background:var(--panel-2); color:var(--text-dim); cursor:pointer; user-select:none;}
+  .chip.on-fear, .chip.on-anxiety, .chip.on-revenge, .chip.on-frustration{background:var(--red-dim); border-color:#4a2427; color:#F5A3A6;}
+  .chip.on-confidence, .chip.on-satisfaction{background:var(--green-dim); border-color:#234a3c; color:#8fdcbd;}
+  .chip.on-fomo, .chip.on-movedStop, .chip.on-impatience{background:var(--amber-dim); border-color:#4a3a1e; color:#f0c684;}
+
+  .checklist{display:flex; flex-direction:column; gap:9px;}
+  .check-item{display:flex; align-items:center; gap:10px; font-size:12.5px; cursor:pointer;}
+  .check-item input{width:15px; height:15px; accent-color:var(--green); cursor:pointer;}
+  .check-item.auto{cursor:default;}
+  .check-item .badge{margin-left:auto; font-family:var(--font-mono); font-size:10px; padding:2px 8px; border-radius:4px;}
+  .check-item .badge.ok{background:var(--green-dim); color:var(--green);}
+  .check-item .badge.bad{background:var(--red-dim); color:var(--red);}
+
+  .daily-banner{display:flex; align-items:center; justify-content:space-between; padding:13px 16px; border-radius:8px; border:1px solid; margin-bottom:18px; font-size:12.5px;}
+  .daily-banner.ok{background:var(--green-dim); border-color:#234a3c; color:#8fdcbd;}
+  .daily-banner.bad{background:var(--red-dim); border-color:#4a2427; color:#F5A3A6;}
+  .daily-banner .lbl{font-family:var(--font-mono); font-weight:600;}
+
+  .account-card{border:1px solid var(--border); border-radius:10px; padding:18px; margin-bottom:16px; background:var(--panel-2);}
+  .account-card-head{display:flex; align-items:center; justify-content:space-between; margin-bottom:16px; gap:10px; flex-wrap:wrap;}
+  .account-card-head input.acc-label{font-family:var(--font-display); font-size:15px; font-weight:600; background:transparent; border:none; border-bottom:1px dashed var(--border); padding:2px 0; width:auto; min-width:120px;}
+  .active-badge{font-family:var(--font-mono); font-size:10px; color:var(--green); background:var(--green-dim); padding:5px 10px; border-radius:20px; letter-spacing:.05em;}
+  .phase-badge{font-family:var(--font-mono); font-size:10px; padding:5px 10px; border-radius:20px; letter-spacing:.05em;}
+  .phase-badge.evaluation{color:var(--amber); background:var(--amber-dim);}
+  .phase-badge.funded{color:var(--blue); background:var(--blue-dim);}
+  .card-actions{display:flex; gap:8px; align-items:center; flex-wrap:wrap;}
+
+  /* Flow diagram */
+  .flow-diagram{display:flex; flex-direction:column; align-items:flex-start; gap:6px;}
+  .flow-start{font-family:var(--font-mono); font-size:12.5px; font-weight:700; padding:12px 20px; border-radius:8px; background:var(--blue-dim); color:var(--blue); border:1px solid #23386b;}
+  .flow-branches{display:flex; gap:36px; margin-top:6px; flex-wrap:wrap;}
+  .flow-branch{display:flex; flex-direction:column; align-items:flex-start; gap:6px;}
+  .flow-arrow-label{font-family:var(--font-mono); font-size:11px; color:var(--text-faint); padding-left:4px;}
+  .flow-box{font-family:var(--font-mono); font-size:12px; font-weight:600; padding:11px 18px; border-radius:8px; border:1px solid; min-width:140px; text-align:center;}
+  .flow-box.win{background:var(--green-dim); color:var(--green); border-color:#234a3c;}
+  .flow-box.loss{background:var(--red-dim); color:var(--red); border-color:#4a2427;}
+  .flow-sub{display:flex; gap:20px; margin-top:6px; margin-left:8px; flex-wrap:wrap;}
+  .flow-cap{margin-top:16px; font-family:var(--font-mono); font-size:10.5px; color:var(--text-faint); letter-spacing:.08em; text-transform:uppercase;}
+
+  /* Hidden rule cards */
+  .hr-card{display:flex; gap:14px; padding:14px 0; border-bottom:1px solid var(--border-soft);}
+  .hr-card:last-child{border-bottom:none;}
+  .hr-num{font-family:var(--font-mono); font-size:13px; font-weight:700; color:var(--amber); background:var(--amber-dim); width:28px; height:28px; border-radius:50%; display:flex; align-items:center; justify-content:center; flex-shrink:0;}
+  .hr-title{font-family:var(--font-display); font-size:13px; font-weight:600; margin-bottom:4px;}
+  .hr-desc{font-size:12px; color:var(--text-dim); line-height:1.55;}
+  .hr-rule{font-family:var(--font-mono); font-size:11px; color:var(--amber); margin-top:5px;}
+
+  /* Auth screen */
+  #auth-screen{position:fixed; inset:0; background:var(--bg); z-index:200; display:flex; align-items:center; justify-content:center;
+    background-image:linear-gradient(var(--border-soft) 1px, transparent 1px), linear-gradient(90deg, var(--border-soft) 1px, transparent 1px); background-size:64px 64px;}
+  .auth-box{width:360px; max-width:90vw; background:var(--panel); border:1px solid var(--border); border-radius:12px; padding:32px;}
+  .auth-brand{font-family:var(--font-display); font-weight:700; font-size:20px; text-align:center; margin-bottom:4px;}
+  .auth-brand span{color:var(--green);}
+  .auth-sub{text-align:center; color:var(--text-dim); font-size:12px; margin-bottom:24px;}
+  .auth-tabs{display:flex; border:1px solid var(--border); border-radius:6px; overflow:hidden; margin-bottom:20px;}
+  .auth-tab{flex:1; text-align:center; padding:9px; font-size:12px; font-weight:600; color:var(--text-dim); cursor:pointer; background:var(--panel-2);}
+  .auth-tab.active{background:var(--blue-dim); color:var(--blue);}
+  .auth-error{background:var(--red-dim); border:1px solid #4a2427; color:#F5A3A6; font-size:12px; font-family:var(--font-mono); padding:10px 12px; border-radius:6px; margin-bottom:14px; display:none;}
+  .auth-error.show{display:block;}
+  .auth-info{background:var(--blue-dim); border:1px solid #23386b; color:#a9c4ff; font-size:11.5px; padding:10px 12px; border-radius:6px; margin-bottom:14px; line-height:1.5;}
+  .auth-note{font-family:var(--font-mono); font-size:10.5px; color:var(--text-faint); text-align:center; margin-top:16px; line-height:1.6;}
+  .auth-note a{color:var(--text-dim);}
+  .sync-badge{font-family:var(--font-mono); font-size:9.5px; padding:4px 9px; border-radius:12px; display:inline-flex; align-items:center; gap:5px; margin-top:8px;}
+  .sync-badge.cloud{background:var(--green-dim); color:var(--green);}
+  .sync-badge.local{background:var(--amber-dim); color:var(--amber);}
+  .live-seconds{display:inline-block; width:6px; height:6px; border-radius:50%; background:var(--green); margin-left:6px; animation:pulse 1s infinite;}
+  @keyframes pulse{0%,100%{opacity:1;} 50%{opacity:.3;}}
+</style>
+</head>
+<body>
+<div id="auth-screen" style="display:none;">
+  <div class="auth-box">
+    <div class="auth-brand">RISK<span>DESK</span></div>
+    <div class="auth-sub">Sign in to sync your accounts across devices</div>
+    <div class="auth-error" id="auth-error"></div>
+    <div class="auth-tabs">
+      <div class="auth-tab active" data-authtab="signin">Sign In</div>
+      <div class="auth-tab" data-authtab="signup">Create Account</div>
+    </div>
+    <div class="field"><label>Email</label><input type="text" id="auth-email" placeholder="you@example.com"></div>
+    <div class="field"><label>Password</label><input type="text" id="auth-password" placeholder="min 6 characters"></div>
+    <div class="btn-row" style="margin-top:8px;"><button class="btn-primary" id="auth-submit" style="width:100%;">Sign In</button></div>
+    <div class="btn-row"><button class="btn-ghost" id="auth-guest" style="width:100%;">Continue without an account (local only)</button></div>
+    <div class="auth-note">Your trades and settings sync to this account. Use the same email/password on any device.</div>
+  </div>
+</div>
+
+<div id="cloud-unconfigured-banner" class="warn-box warn" style="display:none; position:fixed; top:16px; left:50%; transform:translateX(-50%); z-index:150; max-width:520px;"></div>
+
+<div class="app">
+
+  <aside class="sidebar">
+    <div class="brand">
+      <div class="brand-mark">RISK<span>DESK</span></div>
+      <div class="brand-sub">Futures Account System</div>
+    </div>
+    <nav class="nav">
+      <div class="nav-item active" data-tab="dashboard"><span class="idx">01</span>Dashboard</div>
+      <div class="nav-item" data-tab="calculator"><span class="idx">02</span>Calculator</div>
+      <div class="nav-item" data-tab="log"><span class="idx">03</span>Trade Log</div>
+      <div class="nav-item" data-tab="rules"><span class="idx">04</span>Firm Rules</div>
+      <div class="nav-item" data-tab="setup"><span class="idx">05</span>Acc Settings</div>
+    </nav>
+    <div class="sidebar-foot">
+      <div class="foot-label"><span class="live-dot"></span>DESK ACTIVE</div>
+      <div class="sync-badge local" id="sync-badge">● LOCAL ONLY</div>
+      <div class="storage-note" id="account-email-note" style="display:none;"></div>
+      <button class="btn-ghost btn-small" id="btn-sign-out" style="display:none; margin-top:8px; width:100%;">Sign Out</button>
+      <div class="storage-note">Data saves to this browser only. Open the downloaded file the same way each time to keep your log.</div>
+      <div class="storage-note" style="margin-top:10px;">Built by Nagaraj VK<br>mr.nagarajvk@gmail.com</div>
+    </div>
+  </aside>
+
+  <main class="main">
+
+    <!-- DASHBOARD -->
+    <div class="tab-content active" id="tab-dashboard">
+      <div class="topbar">
+        <div><div class="page-title">Account Status</div><div class="page-sub">Everything here is derived. You never re-enter what the engine already knows.</div></div>
+        <select class="acct-switch" id="acct-switch-dash"></select>
+      </div>
+      <div class="stat-strip" id="stat-strip"></div>
+      <div class="grid2">
+        <div class="panel"><div class="panel-head"><div class="panel-title"><span class="n">§1</span>Progress</div></div><div id="meters-progress"></div></div>
+        <div class="panel"><div class="panel-head"><div class="panel-title"><span class="n">§2</span>Rule Compliance</div></div><div class="status-list" id="status-list"></div></div>
+      </div>
+      <div class="panel">
+        <div class="panel-head"><div class="panel-title"><span class="n">§3</span>Profitable Days</div><div class="panel-note" id="days-note"></div></div>
+        <div class="dot-row" id="dot-row"></div>
+      </div>
+    </div>
+
+    <!-- CALCULATOR -->
+    <div class="tab-content" id="tab-calculator">
+      <div class="topbar">
+        <div><div class="page-title">Position Calculator</div><div class="page-sub">Enter price levels. Contracts, risk and R:R are computed against your live account rules.</div></div>
+        <select class="acct-switch" id="acct-switch-calc"></select>
+      </div>
+      <div class="daily-banner" id="daily-banner"></div>
+      <div class="grid2" style="align-items:start;">
+        <div class="panel">
+          <div class="panel-head"><div class="panel-title"><span class="n">§1</span>Trade Parameters</div></div>
+          <div class="field"><label>Instrument</label><select id="calc-instrument"></select></div>
+          <div class="field"><label>Direction</label>
+            <div class="toggle-group"><div class="toggle-opt active" data-dir="long">LONG</div><div class="toggle-opt" data-dir="short">SHORT</div></div>
+          </div>
+          <div class="grid2">
+            <div class="field"><label>Entry Price</label><input type="number" id="calc-entry" step="any" placeholder="0.00"></div>
+            <div class="field"><label>Stop Loss</label><input type="number" id="calc-sl" step="any" placeholder="0.00"></div>
+          </div>
+          <div class="field"><label>Take Profit</label><input type="number" id="calc-tp" step="any" placeholder="0.00"></div>
+          <div class="field"><label>Sizing Mode</label>
+            <div class="toggle-group"><div class="toggle-opt active" data-size="auto">AUTO (from risk setting)</div><div class="toggle-opt" data-size="manual">MANUAL CONTRACTS</div></div>
+          </div>
+          <div class="field" id="manual-contracts-field" style="display:none;"><label>Contracts</label><input type="number" id="calc-manual-contracts" step="1" min="1" placeholder="1"></div>
+        </div>
+        <div class="result-panel">
+          <div class="result-hero"><div class="n" id="res-contracts">0</div><div class="l" id="res-contracts-label">Contracts</div></div>
+          <div class="result-line"><span class="k">Risk (points / ticks)</span><span class="v" id="res-points">—</span></div>
+          <div class="result-line"><span class="k">Dollar Risk</span><span class="v" id="res-risk-usd">—</span></div>
+          <div class="result-line"><span class="k">Dollar Reward</span><span class="v" id="res-reward-usd">—</span></div>
+          <div class="result-line"><span class="k">Reward : Risk</span><span class="v" id="res-rr">—</span></div>
+          <div class="result-line"><span class="k">Risk / Point / Contract</span><span class="v" id="res-per-point">—</span></div>
+          <div class="result-line"><span class="k">Win Rate</span><span class="v" id="res-winrate">—</span></div>
+          <div class="result-line"><span class="k">Trades Left (this risk size)</span><span class="v" id="res-trades-left">—</span></div>
+          <div id="res-warning"></div>
+        </div>
+      </div>
+
+      <div class="panel">
+        <div class="panel-head"><div class="panel-title"><span class="n">§2</span>Pre-Trade Journal</div><div class="panel-note">Confirm before you're in the trade, not after</div></div>
+        <div class="grid3">
+          <div class="field"><label>Session</label>
+            <select id="jr-session"><option>Asia</option><option>London</option><option selected>NY AM (8:30 Open)</option><option>NY PM</option><option>Other</option></select>
+          </div>
+          <div class="field"><label>Setup</label><input type="text" id="jr-setup" placeholder="e.g. FVG retest, OB, liquidity sweep"></div>
+          <div class="field"><label>Liquidity Identified</label><input type="text" id="jr-liquidity" placeholder="e.g. sell-side sweep of Asia low"></div>
+        </div>
+        <div class="field" style="max-width:180px;"><label>Time <span class="live-seconds" id="time-live-dot" title="Live — updates every second"></span></label><input type="time" id="jr-time" step="1"></div>
+        <div class="grid2" style="align-items:start; margin-top:6px;">
+          <div>
+            <div class="detail-block-title" style="margin-bottom:10px;">Checklist</div>
+            <div class="checklist">
+              <label class="check-item"><input type="checkbox" id="chk-bias"> Bias confirmed</label>
+              <label class="check-item"><input type="checkbox" id="chk-session"> Session valid</label>
+              <label class="check-item"><input type="checkbox" id="chk-liquidity"> Liquidity identified</label>
+              <label class="check-item"><input type="checkbox" id="chk-setup"> Setup valid</label>
+              <div class="check-item auto">Risk within limits <span class="badge" id="badge-risk">—</span></div>
+              <div class="check-item auto">Daily rules allow another execution <span class="badge" id="badge-daily">—</span></div>
+            </div>
+          </div>
+          <div>
+            <div class="detail-block-title" style="margin-bottom:10px;">Before — how are you feeling?</div>
+            <div class="chip-row" id="before-chips">
+              <div class="chip" data-cat="before" data-key="fear">Fear</div>
+              <div class="chip" data-cat="before" data-key="confidence">Confidence</div>
+              <div class="chip" data-cat="before" data-key="fomo">FOMO</div>
+            </div>
+          </div>
+        </div>
+        <div class="btn-row"><label class="check-item" style="font-size:11.5px; color:var(--text-faint);"><input type="checkbox" id="chk-override"> Log anyway (override checklist)</label></div>
+        <div class="btn-row" style="margin-top:6px;"><button class="btn-primary" id="btn-log-trade">Log This Trade</button></div>
+      </div>
+    </div>
+
+    <!-- LOG -->
+    <div class="tab-content" id="tab-log">
+      <div class="topbar">
+        <div><div class="page-title">Trade Log</div><div class="page-sub">Realized results drive every number on the Dashboard. Expand a row to close out the journal.</div></div>
+        <select class="acct-switch" id="acct-switch-log"><option value="all">All Accounts</option></select>
+      </div>
+      <div class="panel" style="padding:0; overflow-x:auto;">
+        <table class="log" id="log-table">
+          <thead><tr><th>Date</th><th>Acct</th><th>Instr</th><th>Dir</th><th>Entry</th><th>SL</th><th>TP</th><th>Ctr</th><th>Risk $</th><th>Result $</th><th>R</th><th>Session</th><th></th><th></th></tr></thead>
+          <tbody id="log-tbody"></tbody>
+        </table>
+        <div class="empty-state" id="log-empty" style="display:none;"><div class="big">NO TRADES LOGGED</div><div>Run a calculation on the Calculator tab and hit "Log This Trade" to start tracking.</div></div>
+      </div>
+    </div>
+
+    <!-- FIRM RULES -->
+    <div class="tab-content" id="tab-rules">
+      <div class="topbar">
+        <div><div class="page-title">Firm Rules &amp; Hidden Traps</div><div class="page-sub">The mechanics that actually govern the account — read before every session.</div></div>
+        <select class="acct-switch" id="acct-switch-rules"></select>
+      </div>
+
+      <div class="panel">
+        <div class="panel-head"><div class="panel-title"><span class="n">§1</span>Daily Trade System</div><div class="panel-note">Your discipline rule — applies regardless of firm</div></div>
+        <div class="flow-diagram">
+          <div class="flow-start">TRADE 1</div>
+          <div class="flow-branches">
+            <div class="flow-branch">
+              <div class="flow-arrow-label">↓ LOSS</div>
+              <div class="flow-box loss">STOP TRADING</div>
+            </div>
+            <div class="flow-branch">
+              <div class="flow-arrow-label">↓ WIN</div>
+              <div class="flow-box win">TRADE 2</div>
+              <div class="flow-sub">
+                <div class="flow-branch"><div class="flow-arrow-label">↓ WIN</div><div class="flow-box loss" style="background:var(--green-dim); color:var(--green); border-color:#234a3c;">STOP</div></div>
+                <div class="flow-branch"><div class="flow-arrow-label">↓ LOSS</div><div class="flow-box loss">STOP</div></div>
+              </div>
+            </div>
+          </div>
+          <div class="flow-cap">Maximum 2 trades / day</div>
+        </div>
+      </div>
+
+      <div class="panel" id="eod-panel"></div>
+
+      <div class="panel" id="hidden-rules-panel"></div>
+
+      <div class="panel" id="firm-rules-panel"></div>
+    </div>
+
+    <!-- SETUP / ACC SETTINGS -->
+    <div class="tab-content" id="tab-setup">
+      <div class="topbar">
+        <div><div class="page-title">Acc Settings</div><div class="page-sub">Configure once per account. The engine reads from here — add every account you rotate through.</div></div>
+        <span class="save-flash" id="save-flash">SAVED</span>
+      </div>
+      <div class="panel-note" style="margin-bottom:8px;">Quick add:</div>
+      <div class="btn-row" style="margin-top:0; margin-bottom:18px;">
+        <button class="btn-ghost btn-quick-add" data-firm="lucid" data-size="25K">+ Lucid 25K</button>
+        <button class="btn-ghost btn-quick-add" data-firm="lucid" data-size="50K">+ Lucid 50K</button>
+        <button class="btn-ghost btn-quick-add" data-firm="lucid" data-size="100K">+ Lucid 100K</button>
+        <button class="btn-ghost btn-quick-add" data-firm="mffu" data-size="25K">+ MFFU 25K</button>
+        <button class="btn-ghost btn-quick-add" data-firm="mffu" data-size="50K">+ MFFU 50K</button>
+      </div>
+
+      <div id="accounts-list"></div>
+      <div class="btn-row">
+        <button class="btn-ghost" id="btn-add-account">+ Add Custom Account</button>
+        <button class="btn-primary" id="btn-save-setup">Save All</button>
+        <button class="btn-danger" id="btn-reset-log">Clear Trade Log</button>
+      </div>
+    </div>
+
+  </main>
+</div>
+
+<script>
+(function(){
+
+  /* ============ CONFIG ============ */
+
+  // Fill these in after creating a free project at supabase.com — see setup instructions.
+  // Leave as-is to run in local-only mode (data stays on this browser/device only).
+  const SUPABASE_URL = 'YOUR_SUPABASE_URL';
+  const SUPABASE_ANON_KEY = 'YOUR_SUPABASE_ANON_KEY';
+  const CLOUD_CONFIGURED = SUPABASE_URL !== 'YOUR_SUPABASE_URL' && SUPABASE_ANON_KEY !== 'YOUR_SUPABASE_ANON_KEY';
+
+  const INSTRUMENTS = {
+    NQ:{label:"NQ — Nasdaq-100 E-mini", tick:0.25, tickValue:5, exchange:"CME"},
+    MNQ:{label:"MNQ — Micro Nasdaq-100", tick:0.25, tickValue:0.5, exchange:"CME"},
+    ES:{label:"ES — S&P 500 E-mini", tick:0.25, tickValue:12.5, exchange:"CME"},
+    MES:{label:"MES — Micro S&P 500", tick:0.25, tickValue:1.25, exchange:"CME"},
+    YM:{label:"YM — Dow E-mini", tick:1, tickValue:5, exchange:"CBOT"},
+    MYM:{label:"MYM — Micro Dow", tick:1, tickValue:0.5, exchange:"CBOT"},
+    RTY:{label:"RTY — Russell 2000 E-mini", tick:0.10, tickValue:5, exchange:"CME"},
+    M2K:{label:"M2K — Micro Russell 2000", tick:0.10, tickValue:0.5, exchange:"CME"},
+    GC:{label:"GC — Gold", tick:0.10, tickValue:10, exchange:"COMEX"},
+    MGC:{label:"MGC — Micro Gold", tick:0.10, tickValue:1, exchange:"COMEX"},
+    CL:{label:"CL — Crude Oil", tick:0.01, tickValue:10, exchange:"NYMEX"},
+    MCL:{label:"MCL — Micro Crude Oil", tick:0.01, tickValue:1, exchange:"NYMEX"},
+    // --- Verified against official CME/COMEX contract specs, July 2026 ---
+    SI:{label:"SI — Silver (5,000oz)", tick:0.005, tickValue:25, exchange:"COMEX"},
+    SIL:{label:"SIL — Micro Silver (1,000oz)", tick:0.005, tickValue:5, exchange:"COMEX"}, // NOT 2.50 — SIL is 1/5 the size of SI (1,000oz vs 5,000oz), not 1/10. $0.005 x 1,000oz = $5.00/tick.
+    "6E":{label:"6E — Euro FX (12,500€ std)", tick:0.00005, tickValue:6.25, exchange:"CME"},
+    M6E:{label:"M6E — Micro Euro FX", tick:0.0001, tickValue:1.25, exchange:"CME"},
+    "6B":{label:"6B — British Pound (62,500£)", tick:0.0001, tickValue:6.25, exchange:"CME"},
+    M6B:{label:"M6B — Micro GBP/USD", tick:0.0001, tickValue:0.625, exchange:"CME"},
+    "6S":{label:"6S — Swiss Franc (125,000₣)", tick:0.0001, tickValue:12.5, exchange:"CME"},
+    MSF:{label:"MSF — Micro CHF/USD", tick:0.0001, tickValue:1.25, exchange:"CME"}, // ticker is MSF, not "M6S" — corrected
+    "6N":{label:"6N — New Zealand Dollar (100,000 NZD, full-size only)", tick:0.0001, tickValue:10, exchange:"CME"}, // CME has NO Micro NZD (no "M6N") — see note below
+  };
+
+  // dailyLoss: 0 means "no daily loss limit" (confirmed for LucidFlex / MFFU Flex — EOD trailing DD governs risk instead).
+  // consistencyEval only applies during the Evaluation phase; both firms drop it once funded — toggle Phase per account.
+  const FIRMS = {
+    lucid: { label:"Lucid Trading — Flex", accounts:{
+      "25K": { balance:25000, profitTarget:1250, dailyLoss:0, maxDrawdown:1000, drawdownType:"Trailing", consistencyEval:50, minProfitableDays:5, maxContracts:20, profitSplit:90, maxPayoutPerCycle:1000, minPayout:500 },
+      "50K": { balance:50000, profitTarget:3000, dailyLoss:0, maxDrawdown:2000, drawdownType:"Trailing", consistencyEval:50, minProfitableDays:5, maxContracts:40, profitSplit:90, maxPayoutPerCycle:2000, minPayout:500 },
+      "100K":{ balance:100000,profitTarget:6000, dailyLoss:0, maxDrawdown:4000, drawdownType:"Trailing", consistencyEval:50, minProfitableDays:5, maxContracts:80, profitSplit:90, maxPayoutPerCycle:4000, minPayout:500 },
+    }},
+    mffu: { label:"MFFU — Flex", accounts:{
+      "25K": { balance:25000, profitTarget:1500, dailyLoss:0, maxDrawdown:1000, drawdownType:"Trailing", consistencyEval:50, minProfitableDays:5, maxContracts:20, profitSplit:80, maxPayoutPerCycle:1000, minPayout:250 },
+      "50K": { balance:50000, profitTarget:3000, dailyLoss:0, maxDrawdown:2000, drawdownType:"Trailing", consistencyEval:50, minProfitableDays:5, maxContracts:40, profitSplit:80, maxPayoutPerCycle:2000, minPayout:250 },
+    }},
+    custom: { label:"Custom Firm", accounts:{
+      "Custom": { balance:25000, profitTarget:2000, dailyLoss:1000, maxDrawdown:1500, drawdownType:"Static", consistencyEval:20, minProfitableDays:5, maxContracts:20, profitSplit:80, maxPayoutPerCycle:1000, minPayout:100 }
+    }}
+  };
+
+  const RULE_FIELDS = [
+    ["balance","Starting Balance ($)"], ["profitTarget","Eval Profit Target ($)"],
+    ["dailyLoss","Daily Loss Limit ($) — 0 = none"], ["maxDrawdown","DD Buffer ($)"], ["drawdownType","Drawdown Type (Static/Trailing)"],
+    ["consistencyEval","Consistency Rule — Eval Only (%)"], ["minProfitableDays","Profitable Days / Payout Cycle"], ["maxContracts","Max Contracts"],
+    ["profitSplit","Profit Split (%)"], ["maxPayoutPerCycle","Max Payout / Cycle ($)"], ["minPayout","Min Payout ($)"],
+  ];
+
+  // Firm-level rules not captured by the per-account numbers above (inactivity, hedging, news, etc).
+  // Only firms with an entry here get real answers in the §4 panel — anything else shows "not on file"
+  // instead of guessing. Add a firm here (key must match a FIRMS key) once you've confirmed its rules.
+  const FIRM_META = {
+    lucid: { label:"LucidFlex", inactivity:"30 days → deleted", liveTransfer:"$5K max transfers to live", payoutCap:"50% of net profit, up to $1K/$2K cap", postPayout:"Recalculate your floor buffer manually", hedging:"Permanent ban", circuitBreaker:"Not specified", news:"No restrictions" },
+    mffu:  { label:"MFFU",      inactivity:"7 days → deleted",  liveTransfer:"Sim only — no live path",       payoutCap:"50% of net profit, up to $1K/$2K cap", postPayout:"Drawdown resets — different mechanic", hedging:"Permanent ban", circuitBreaker:"2% move → trading suspended", news:"T1 news = 2-min flat rule" },
+  };
+
+  const HIDDEN_RULES_LUCID = [
+    {title:"Your safety floor locks for good once you clear +$100",
+     desc:"The floor that decides a breach follows your balance up. Once your equity gets past starting balance + $100, the floor stops moving and stays there forever — it can't drop below that point again.",
+     rule:"Push past this mark fast. Once you're through, this account can't be broken from below."},
+    {title:"No trades for 30 days = account deleted",
+     desc:"Skip 30 straight calendar days with zero trades and the account is gone. No warning email, no grace period.",
+     rule:"Place at least 1 trade every 25 days, even in slow weeks."},
+    {title:"Only $5,000 of profit moves to real money",
+     desc:"After 6 payouts you graduate to live funding — but only the first $5,000 of sim profit comes with you. Anything above that is lost.",
+     rule:"Cash out via payouts every cycle. Don't let profit pile up in the sim account."},
+    {title:"You can only pull half your profit per cycle",
+     desc:"Max payout is 50% of that cycle's net profit, even if you're under the $1K/$2K cap. $800 profit only gets you $400.",
+     rule:"Want the full $1,000 payout on a 25K account? You need $2,000+ profit that cycle."},
+    {title:"Payouts can shrink your safety cushion fast",
+     desc:"Every payout lowers your balance. Pull too close to the cap and you're left with almost no room above your floor — one bad trade can breach.",
+     rule:"Keep at least $1,000 above your floor after any payout ($2,000 on a 50K account)."},
+    {title:"Hedging = instant permanent ban",
+     desc:"Any hedging, on this account or across your other accounts, gets you banned outright. Not a warning — a ban.",
+     rule:"Never hedge. No exceptions."},
+    {title:"Too many sub-5-second trades get flagged",
+     desc:"Fast scalping is allowed. But if trades closing in under 5 seconds make up more than half your profit, it gets reviewed.",
+     rule:"Your quick style is fine — just don't lean on rapid sub-5-second flips over and over."},
+  ];
+
+  /* ============ STATE ============ */
+
+  function defaultAccount(id, label, firm, accKey, alias){
+    return { id, label, firm, account:accKey, alias: alias || "", phase:"evaluation", riskMode:"fixed", riskValue:100,
+      rules: JSON.parse(JSON.stringify(FIRMS[firm].accounts[accKey])) };
+  }
+
+  let state = {
+    accounts:[ defaultAccount('acc1','Plan A — Lucid','lucid','25K'), defaultAccount('acc2','Plan B — MFFU','mffu','25K') ],
+    activeAccountId:'acc1',
+  };
+  let trades = [];
+  let calcState = { direction:"long", sizeMode:"auto" };
+  let lastCalcResult = null;
+  let rulesViewAccountId = null;
+
+  const $ = (sel, root=document) => root.querySelector(sel);
+  const $$ = (sel, root=document) => Array.from(root.querySelectorAll(sel));
+  const fmt$ = (n) => (n<0?"-$":"$") + Math.abs(n).toLocaleString("en-US",{minimumFractionDigits:2, maximumFractionDigits:2});
+  const fmtN = (n, d=2) => Number(n).toLocaleString("en-US",{minimumFractionDigits:d, maximumFractionDigits:d});
+  const uid = () => 'a'+Math.random().toString(36).slice(2,9);
+
+  function getActiveAccount(){ return state.accounts.find(a=>a.id===state.activeAccountId) || state.accounts[0]; }
+
+  /* ============ STORAGE (local cache) ============ */
+  /* localStorage is always used as a fast local cache. When signed in and CLOUD_CONFIGURED,
+     every save is also pushed to Supabase so it's readable from any device on the same login. */
+
+  const LS_SETTINGS = 'riskdesk-settings-v1', LS_TRADES = 'riskdesk-trades-v1';
+  const LS_SETTINGS_OLD = 'vedic-settings-v3', LS_TRADES_OLD = 'vedic-trades-v3';
+
+  function saveState(){
+    try{ localStorage.setItem(LS_SETTINGS, JSON.stringify({state, calcState})); }catch(e){ console.error('save settings failed', e); }
+    pushCloud();
+  }
+  function saveTrades(){
+    try{ localStorage.setItem(LS_TRADES, JSON.stringify(trades)); }catch(e){ console.error('save trades failed', e); }
+    pushCloud();
+  }
+  function loadLocal(){
+    try{
+      // migrate old Vedic-branded storage keys forward, one time, if present
+      let s = localStorage.getItem(LS_SETTINGS);
+      if(!s && localStorage.getItem(LS_SETTINGS_OLD)) s = localStorage.getItem(LS_SETTINGS_OLD);
+      if(s){
+        const parsed = JSON.parse(s);
+        if(parsed.state && parsed.state.accounts && parsed.state.accounts.length) state = parsed.state;
+        calcState = parsed.calcState || calcState;
+      }
+    }catch(e){ /* no saved settings yet */ }
+    try{
+      let t = localStorage.getItem(LS_TRADES);
+      if(!t && localStorage.getItem(LS_TRADES_OLD)) t = localStorage.getItem(LS_TRADES_OLD);
+      if(t) trades = JSON.parse(t);
+    }catch(e){ /* no saved trades yet */ }
+    state.accounts.forEach(a=>{ if(typeof a.alias === 'undefined') a.alias = ''; });
+  }
+  /* ============ CLOUD AUTH & SYNC ============ */
+
+  let supabaseClient = null;
+  let currentUser = null;
+  let cloudPushTimer = null;
+
+  if(CLOUD_CONFIGURED && window.supabase){
+    supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+  }
+
+  function setSyncBadge(mode){
+    const el = $('#sync-badge');
+    if(mode === 'cloud'){ el.className = 'sync-badge cloud'; el.textContent = '● SYNCED TO CLOUD'; }
+    else { el.className = 'sync-badge local'; el.textContent = '● LOCAL ONLY'; }
+  }
+
+  function pushCloud(){
+    if(!supabaseClient || !currentUser) return;
+    clearTimeout(cloudPushTimer);
+    cloudPushTimer = setTimeout(async ()=>{
+      try{
+        await supabaseClient.from('riskdesk_data').upsert({
+          user_id: currentUser.id,
+          settings: {state, calcState},
+          trades: trades,
+          updated_at: new Date().toISOString(),
+        });
+      }catch(e){ console.error('cloud sync failed', e); }
+    }, 500);
+  }
+
+  async function loadCloud(){
+    if(!supabaseClient || !currentUser) return;
+    try{
+      const { data, error } = await supabaseClient.from('riskdesk_data').select('*').eq('user_id', currentUser.id).maybeSingle();
+      if(error) throw error;
+      if(data){
+        if(data.settings && data.settings.state && data.settings.state.accounts && data.settings.state.accounts.length){
+          state = data.settings.state; calcState = data.settings.calcState || calcState;
+        }
+        if(data.trades) trades = data.trades;
+        state.accounts.forEach(a=>{ if(typeof a.alias === 'undefined') a.alias = ''; });
+      } else {
+        // first login on this account — push whatever's currently local up as the starting cloud copy
+        pushCloud();
+      }
+    }catch(e){ console.error('cloud load failed', e); }
+  }
+
+  function showAuthScreen(){ $('#auth-screen').style.display = 'flex'; }
+  function hideAuthScreen(){ $('#auth-screen').style.display = 'none'; }
+
+  function setAuthError(msg){
+    const el = $('#auth-error');
+    if(!msg){ el.classList.remove('show'); el.textContent=''; return; }
+    el.textContent = msg; el.classList.add('show');
+  }
+
+  let authMode = 'signin';
+  $$('.auth-tab').forEach(tab=>tab.addEventListener('click', ()=>{
+    $$('.auth-tab').forEach(t=>t.classList.remove('active')); tab.classList.add('active');
+    authMode = tab.dataset.authtab;
+    $('#auth-submit').textContent = authMode === 'signin' ? 'Sign In' : 'Create Account';
+    setAuthError(null);
+  }));
+
+  $('#auth-submit').addEventListener('click', async ()=>{
+    setAuthError(null);
+    const email = $('#auth-email').value.trim();
+    const password = $('#auth-password').value;
+    if(!email || password.length < 6){ setAuthError('Enter a valid email and a password of at least 6 characters.'); return; }
+    if(!supabaseClient){ setAuthError('Cloud sync isn\'t configured yet. Use "Continue without an account" for now.'); return; }
+    try{
+      let res;
+      if(authMode === 'signin') res = await supabaseClient.auth.signInWithPassword({ email, password });
+      else res = await supabaseClient.auth.signUp({ email, password });
+      if(res.error) throw res.error;
+      if(authMode === 'signup' && !res.data.session){
+        setAuthError('Account created — check your email to confirm, then sign in.');
+        return;
+      }
+      currentUser = res.data.user;
+      await loadCloud();
+      hideAuthScreen();
+      finishBoot();
+    }catch(e){ setAuthError(e.message || 'Something went wrong.'); }
+  });
+
+  $('#auth-guest').addEventListener('click', ()=>{ hideAuthScreen(); finishBoot(); });
+
+  $('#btn-sign-out').addEventListener('click', async ()=>{
+    if(supabaseClient) { try{ await supabaseClient.auth.signOut(); }catch(e){} }
+    currentUser = null;
+    location.reload();
+  });
+
+  async function initAuth(){
+    loadLocal();
+    if(!CLOUD_CONFIGURED){
+      $('#cloud-unconfigured-banner').style.display = 'block';
+      $('#cloud-unconfigured-banner').innerHTML = 'Cloud sync isn\'t set up yet — running local-only. See setup notes in the code comments to enable login across devices.';
+      setTimeout(()=>{ $('#cloud-unconfigured-banner').style.display = 'none'; }, 6000);
+      finishBoot();
+      return;
+    }
+    if(!supabaseClient){ finishBoot(); return; }
+    const { data } = await supabaseClient.auth.getSession();
+    if(data && data.session){
+      currentUser = data.session.user;
+      await loadCloud();
+      finishBoot();
+    } else {
+      showAuthScreen();
+    }
+  }
+
+  function finishBoot(){
+    if(currentUser){
+      setSyncBadge('cloud');
+      $('#account-email-note').style.display = 'block';
+      $('#account-email-note').textContent = 'Signed in as ' + currentUser.email;
+      $('#btn-sign-out').style.display = 'block';
+    } else {
+      setSyncBadge('local');
+    }
+    saveState(); saveTrades();
+    populateInstrumentSelect();
+    populateAcctSwitchers();
+    renderSetupTab();
+    renderAll();
+    startLiveTimeClock();
+  }
+
+  /* ============ DAILY RULE ENGINE ============ */
+
+  function todayStr(){ return new Date().toISOString().slice(0,10); }
+
+  function computeDailyStatus(accountId){
+    const today = todayStr();
+    const todays = trades.filter(t=>t.accountId===accountId && t.date===today).sort((a,b)=>(a.time||'').localeCompare(b.time||''));
+    if(todays.length === 0) return {canTrade:true, label:"Trade 1 available", detail:"No trades logged today. Max 2 trades/day.", tone:"ok"};
+    if(todays.length === 1){
+      const t1 = todays[0];
+      if(t1.result > 0) return {canTrade:true, label:"Trade 2 available", detail:"Trade 1 won — Trade 2 permitted, then stop.", tone:"ok"};
+      if(t1.result < 0) return {canTrade:false, label:"Blocked", detail:"Trade 1 was a loss — stop trading for today.", tone:"bad"};
+      return {canTrade:false, label:"Blocked", detail:"Trade 1 is still open — close it before logging another.", tone:"bad"};
+    }
+    return {canTrade:false, label:"Blocked", detail:"Max 2 trades/day reached — stop trading.", tone:"bad"};
+  }
+
+  /* ============ DERIVED ACCOUNT MATH ============ */
+
+  function getStats(accountId){
+    const acc = state.accounts.find(a=>a.id===accountId);
+    const r = acc.rules;
+    const accTrades = trades.filter(t=>t.accountId===accountId);
+    const realizedTotal = accTrades.reduce((a,t)=>a+(Number(t.result)||0),0);
+    const equity = r.balance + realizedTotal;
+
+    const byDate = {};
+    accTrades.forEach(t=>{ byDate[t.date] = (byDate[t.date]||0) + (Number(t.result)||0); });
+    const dates = Object.keys(byDate).sort();
+    const today = todayStr();
+    const todayPnL = byDate[today] || 0;
+
+    const hasDailyLimit = r.dailyLoss > 0;
+    const dailyLossUsed = todayPnL < 0 ? Math.abs(todayPnL) : 0;
+    const dailyLossRemaining = hasDailyLimit ? Math.max(0, r.dailyLoss - dailyLossUsed) : Infinity;
+    const dailyLossPct = hasDailyLimit ? (1 - (dailyLossUsed / r.dailyLoss)) : 1;
+
+    const consistencyActive = acc.phase !== 'funded';
+    const maxProfitableDayCap = r.profitTarget * ((r.consistencyEval||0)/100);
+    let profitableDays = 0, consistencyBreach = false;
+    dates.forEach(d=>{
+      const pnl = byDate[d];
+      if(pnl > 0) profitableDays++;
+      if(consistencyActive && pnl > maxProfitableDayCap) consistencyBreach = true;
+    });
+
+    const progressToTarget = Math.max(0, Math.min(1, realizedTotal / r.profitTarget));
+
+    let drawdownFloor;
+    if(r.drawdownType && r.drawdownType.toLowerCase().startsWith("trail")){
+      let peakEquity = r.balance, running = r.balance;
+      dates.forEach(d=>{ running += byDate[d]; if(running>peakEquity) peakEquity = running; });
+      drawdownFloor = peakEquity - r.maxDrawdown;
+    } else {
+      drawdownFloor = r.balance - r.maxDrawdown;
+    }
+    const drawdownCushion = equity - drawdownFloor;
+    const drawdownPct = Math.max(0, Math.min(1, drawdownCushion / r.maxDrawdown));
+
+    // Win rate — only counts trades where you've actually filled in a result ($) in the Log tab.
+    const wins = accTrades.filter(t=>Number(t.result) > 0).length;
+    const losses = accTrades.filter(t=>Number(t.result) < 0).length;
+    const decided = wins + losses;
+    const winRate = decided > 0 ? (wins / decided) : null;
+
+    // Trades remaining — how many more trades at your current configured risk size (Setup tab) before the drawdown cushion runs out.
+    const riskPerTrade = acc.riskMode === 'fixed' ? acc.riskValue : (acc.riskValue / 100) * r.balance;
+    const tradesRemaining = riskPerTrade > 0 ? Math.max(0, Math.floor(drawdownCushion / riskPerTrade)) : null;
+
+    // Consistency — live ratio of your best single day's profit against the firm's per-day cap, updates as you log trades.
+    const bestDayPnL = dates.length ? Math.max(0, ...dates.map(d=>byDate[d])) : 0;
+    const consistencyPct = maxProfitableDayCap > 0 ? (bestDayPnL / maxProfitableDayCap) : 0;
+
+    return {
+      equity, realizedTotal, todayPnL, progressToTarget, remainingToTarget: Math.max(0, r.profitTarget - realizedTotal),
+      hasDailyLimit, dailyLossUsed, dailyLossRemaining, dailyLossPct, drawdownFloor, drawdownCushion, drawdownPct,
+      consistencyActive, profitableDays, consistencyBreach, maxProfitableDayCap, daysRemaining: Math.max(0, r.minProfitableDays - profitableDays),
+      wins, losses, decided, winRate, riskPerTrade, tradesRemaining, bestDayPnL, consistencyPct,
+    };
+  }
+
+  /* ============ ACCOUNT SWITCHERS ============ */
+
+  function populateAcctSwitchers(){
+    const opts = state.accounts.map(a=>`<option value="${a.id}">${a.alias ? a.label+' ('+a.alias+')' : a.label}</option>`).join('');
+    ['acct-switch-dash','acct-switch-calc'].forEach(id=>{
+      const el = $('#'+id); el.innerHTML = opts; el.value = state.activeAccountId;
+      el.onchange = (e)=>{ state.activeAccountId = e.target.value; saveState(); populateAcctSwitchers(); renderDashboard(); renderCalcAccountDependents(); };
+    });
+    const logSel = $('#acct-switch-log'); logSel.innerHTML = '<option value="all">All Accounts</option>' + opts; logSel.onchange = renderLog;
+    const rulesSel = $('#acct-switch-rules'); rulesSel.innerHTML = opts;
+    if(!rulesViewAccountId) rulesViewAccountId = state.activeAccountId;
+    rulesSel.value = rulesViewAccountId;
+    rulesSel.onchange = (e)=>{ rulesViewAccountId = e.target.value; renderRulesTab(); };
+  }
+
+  /* ============ RENDER: DASHBOARD ============ */
+
+  function renderDashboard(){
+    const acc = getActiveAccount(); const r = acc.rules; const s = getStats(acc.id);
+
+    const stats = [
+      {label:"Current Equity", value: fmt$(s.equity), sub:`Start ${fmt$(r.balance)}`},
+      {label:"Realized P&L", value: fmt$(s.realizedTotal), cls: s.realizedTotal>=0?'pos':'neg', sub:`Today ${fmt$(s.todayPnL)}`},
+      {label:"Remaining To Target", value: fmt$(s.remainingToTarget), sub:`Target ${fmt$(r.profitTarget)}`},
+      {label:"Drawdown Cushion", value: fmt$(s.drawdownCushion), cls: s.drawdownCushion>0?'pos':'neg', sub:`Floor ${fmt$(s.drawdownFloor)}`},
+      {label:"Win Rate", value: s.winRate!==null ? Math.round(s.winRate*100)+"%" : "—", sub: `${s.wins}W / ${s.losses}L`},
+      {label:"Trades Left", value: s.tradesRemaining!==null ? s.tradesRemaining : "—", sub:`at ${fmt$(s.riskPerTrade)}/trade`},
+    ];
+    $('#stat-strip').innerHTML = stats.map(st=>`<div class="stat"><div class="stat-label">${st.label}</div><div class="stat-value ${st.cls||''}">${st.value}</div><div class="stat-sub">${st.sub}</div></div>`).join('');
+
+    function meter(label, pct, valueText, color){
+      const p = Math.round(Math.max(0,Math.min(1,pct))*100);
+      let ticks=''; for(let i=0;i<20;i++) ticks += '<div class="meter-tick"></div>';
+      return `<div class="meter"><div class="meter-top"><span class="meter-label">${label}</span><span class="meter-value">${valueText}</span></div><div class="meter-track">${ticks}<div class="meter-fill ${color}" style="width:${p}%"></div></div></div>`;
+    }
+    $('#meters-progress').innerHTML =
+      meter("Progress to Target", s.progressToTarget, Math.round(s.progressToTarget*100)+"%", "green") +
+      (s.hasDailyLimit ? meter("Daily Loss Remaining", s.dailyLossPct, fmt$(s.dailyLossRemaining)+" left", s.dailyLossPct<0.3?"red":"blue")
+                        : meter("Daily Loss Remaining", 1, "No limit — EOD DD governs", "blue")) +
+      meter("Drawdown Cushion", s.drawdownPct, fmt$(s.drawdownCushion)+" left", s.drawdownPct<0.3?"red":"amber") +
+      (s.consistencyActive
+        ? meter("Consistency", s.consistencyPct, `${fmt$(s.bestDayPnL)} of ${fmt$(s.maxProfitableDayCap)} cap`, s.consistencyPct>=0.9?"red":(s.consistencyPct>=0.6?"amber":"green"))
+        : meter("Consistency", 1, "Funded — rule lifted", "blue"));
+
+    const daily = computeDailyStatus(acc.id);
+    const checks = [
+      s.hasDailyLimit ? {ok: s.dailyLossUsed < r.dailyLoss, label:`Daily loss: ${fmt$(s.dailyLossUsed)} used of ${fmt$(r.dailyLoss)}`}
+                       : {ok:true, label:`Daily loss: no limit — EOD trailing drawdown governs risk`},
+      {ok: s.drawdownCushion > 0, label:`Drawdown: ${fmt$(s.drawdownCushion)} cushion above floor`},
+      s.consistencyActive ? {ok: !s.consistencyBreach, label:`Consistency (eval): best day vs ${r.consistencyEval}% cap (${fmt$(s.maxProfitableDayCap)})`}
+                           : {ok:true, label:`Consistency: not applicable — account is Funded`},
+      {ok: daily.canTrade, label:`Daily rules: ${daily.detail}`},
+    ];
+    $('#status-list').innerHTML = checks.map(c=>`<div class="status-item"><div class="status-icon ${c.ok?'ok':'bad'}">${c.ok?'✓':'!'}</div><div>${c.label}</div></div>`).join('');
+
+    let dots=''; for(let i=0;i<r.minProfitableDays;i++){ dots += `<div class="dot ${i<s.profitableDays?'filled':''}"></div>`; }
+    $('#dot-row').innerHTML = dots + `<span style="font-family:var(--font-mono); font-size:12px; color:var(--text-dim); margin-left:8px;">${s.profitableDays} / ${r.minProfitableDays} — ${s.daysRemaining} remaining</span>`;
+    $('#days-note').textContent = s.consistencyActive ? (s.consistencyBreach ? "Consistency rule flagged on at least one day" : "On track") : "Funded phase — consistency rule lifted";
+  }
+
+  /* ============ RENDER: CALCULATOR ============ */
+
+  function populateInstrumentSelect(){
+    $('#calc-instrument').innerHTML = Object.keys(INSTRUMENTS).map(k=>`<option value="${k}">${INSTRUMENTS[k].label}</option>`).join('');
+  }
+
+  function renderDailyBanner(){
+    const acc = getActiveAccount(); const d = computeDailyStatus(acc.id); const el = $('#daily-banner');
+    el.className = 'daily-banner ' + (d.canTrade ? 'ok':'bad');
+    el.innerHTML = `<span><span class="lbl">${d.label}</span> — ${d.detail}</span><span style="font-family:var(--font-mono); font-size:11px;">${acc.label}</span>`;
+  }
+
+  function renderCalcAccountDependents(){
+    renderDailyBanner(); updateChecklistBadges(); runCalculator();
+    const s = getStats(getActiveAccount().id);
+    $('#res-winrate').textContent = s.winRate!==null ? `${Math.round(s.winRate*100)}% (${s.wins}W / ${s.losses}L)` : '— (no closed trades yet)';
+    $('#res-trades-left').textContent = s.tradesRemaining!==null ? `${s.tradesRemaining} at ${fmt$(s.riskPerTrade)}/trade` : '—';
+  }
+
+  function runCalculator(){
+    const acc = getActiveAccount(); const key = $('#calc-instrument').value; const inst = INSTRUMENTS[key];
+    const entry = parseFloat($('#calc-entry').value); const sl = parseFloat($('#calc-sl').value); const tp = parseFloat($('#calc-tp').value);
+    const r = acc.rules;
+    const valid = inst && !isNaN(entry) && !isNaN(sl) && entry !== sl;
+    if(!valid){
+      $('#res-contracts').textContent = '0'; $('#res-contracts-label').textContent = 'Contracts';
+      ['res-points','res-risk-usd','res-reward-usd','res-rr','res-per-point'].forEach(id=>$('#'+id).textContent='—');
+      $('#res-warning').innerHTML = ''; lastCalcResult = null; updateChecklistBadges(); return null;
+    }
+    const riskPoints = Math.abs(entry - sl);
+    const rewardPoints = !isNaN(tp) ? Math.abs(tp - entry) : null;
+    const ticksAtRisk = riskPoints / inst.tick;
+    const dollarRiskPerContract = ticksAtRisk * inst.tickValue;
+    const riskBudget = acc.riskMode === 'fixed' ? acc.riskValue : (acc.riskValue/100) * r.balance;
+    let contracts;
+    if(calcState.sizeMode === 'manual') contracts = Math.max(1, Math.floor(parseFloat($('#calc-manual-contracts').value) || 1));
+    else contracts = Math.max(0, Math.floor(riskBudget / dollarRiskPerContract));
+
+    const actualRisk = contracts * dollarRiskPerContract;
+    const rewardPerContract = rewardPoints !== null ? (rewardPoints / inst.tick) * inst.tickValue : null;
+    const actualReward = rewardPerContract !== null ? contracts * rewardPerContract : null;
+    const rr = rewardPoints !== null ? (rewardPoints / riskPoints) : null;
+
+    $('#res-contracts').textContent = contracts; $('#res-contracts-label').textContent = contracts === 1 ? 'Contract' : 'Contracts';
+    $('#res-points').textContent = `${fmtN(riskPoints, inst.tick<1?2:0)} pts / ${fmtN(ticksAtRisk,1)} ticks`;
+    $('#res-risk-usd').textContent = fmt$(actualRisk);
+    $('#res-reward-usd').textContent = actualReward !== null ? fmt$(actualReward) : '—';
+    $('#res-rr').textContent = rr !== null ? `1 : ${fmtN(rr,2)}` : '—';
+    $('#res-per-point').textContent = fmt$(dollarRiskPerContract);
+
+    const s = getStats(acc.id);
+    let warnLevel = 'ok', warnHtml = '';
+    if(contracts === 0){ warnLevel='bad'; warnHtml = `<div class="warn-box bad">Risk budget too small for one contract at this stop distance on ${key}.</div>`; }
+    else if(contracts > r.maxContracts){ warnLevel='bad'; warnHtml = `<div class="warn-box bad">${contracts} contracts exceeds your max contract limit of ${r.maxContracts}.</div>`; }
+    else if(s.hasDailyLimit && actualRisk > s.dailyLossRemaining){ warnLevel='bad'; warnHtml = `<div class="warn-box bad">Risk of ${fmt$(actualRisk)} exceeds today's remaining daily loss buffer of ${fmt$(s.dailyLossRemaining)}.</div>`; }
+    else if(rr !== null && rr < 1){ warnLevel='warn'; warnHtml = `<div class="warn-box warn">Reward:Risk below 1:1 — check your TP level.</div>`; }
+    else { warnHtml = `<div class="warn-box ok">Within account rules${s.hasDailyLimit ? " and today's risk budget" : ""}.</div>`; }
+    $('#res-warning').innerHTML = warnHtml;
+
+    lastCalcResult = {ok:true, warnLevel, key, inst, entry, sl, tp, contracts, actualRisk, actualReward, rr, direction: calcState.direction};
+    updateChecklistBadges();
+    return lastCalcResult;
+  }
+
+  function updateChecklistBadges(){
+    const acc = getActiveAccount(); const daily = computeDailyStatus(acc.id);
+    const riskOk = !!(lastCalcResult && lastCalcResult.warnLevel !== 'bad' && lastCalcResult.contracts > 0);
+    const rb = $('#badge-risk'); rb.textContent = riskOk ? 'OK' : 'CHECK'; rb.className = 'badge ' + (riskOk?'ok':'bad');
+    const db = $('#badge-daily'); db.textContent = daily.canTrade ? 'OK' : 'BLOCKED'; db.className = 'badge ' + (daily.canTrade?'ok':'bad');
+    updateLogButtonState();
+  }
+  function checklistPassed(){
+    const manualOk = $('#chk-bias').checked && $('#chk-session').checked && $('#chk-liquidity').checked && $('#chk-setup').checked;
+    const acc = getActiveAccount(); const daily = computeDailyStatus(acc.id);
+    const riskOk = !!(lastCalcResult && lastCalcResult.warnLevel !== 'bad' && lastCalcResult.contracts > 0);
+    return manualOk && daily.canTrade && riskOk;
+  }
+  function updateLogButtonState(){
+    const btn = $('#btn-log-trade');
+    // Logs every entry regardless of checklist/daily-limit/contract-size — only blocks if Entry/SL aren't valid numbers yet.
+    btn.disabled = !lastCalcResult;
+  }
+
+  let beforeTags = {fear:false, confidence:false, fomo:false};
+  function renderBeforeChips(){ $$('#before-chips .chip').forEach(c=>{ const key = c.dataset.key; c.classList.toggle('on-'+key, !!beforeTags[key]); }); }
+
+  function resetJournalForm(){
+    beforeTags = {fear:false, confidence:false, fomo:false}; renderBeforeChips();
+    $('#chk-bias').checked = false; $('#chk-session').checked = false; $('#chk-liquidity').checked = false; $('#chk-setup').checked = false; $('#chk-override').checked = false;
+    $('#jr-setup').value = ''; $('#jr-liquidity').value = ''; $('#jr-time').value = new Date().toTimeString().slice(0,8);
+    jrTimeAuto = true;
+  }
+
+  /* ============ RENDER: LOG ============ */
+
+  function accountLabel(id){ const a = state.accounts.find(x=>x.id===id); if(!a) return '—'; return a.alias ? `${a.label} (${a.alias})` : a.label; }
+
+  function renderLog(){
+    const filter = $('#acct-switch-log').value;
+    const list = filter==='all' ? trades : trades.filter(t=>t.accountId===filter);
+    const tbody = $('#log-tbody');
+    if(list.length === 0){ tbody.innerHTML = ''; $('#log-empty').style.display = 'block'; return; }
+    $('#log-empty').style.display = 'none';
+    let rows = '';
+    list.slice().reverse().forEach((t)=>{
+      const idx = trades.indexOf(t);
+      const rVal = t.risk ? (Number(t.result||0)/t.risk) : 0;
+      rows += `<tr data-row="${idx}">
+        <td>${t.date}</td><td>${accountLabel(t.accountId)}</td><td>${t.instrument}</td>
+        <td><span class="tag ${t.direction}">${t.direction.toUpperCase()}</span></td>
+        <td>${fmtN(t.entry, 2)}</td><td>${fmtN(t.sl, 2)}</td><td>${t.tp?fmtN(t.tp,2):'—'}</td><td>${t.contracts}</td><td>${fmt$(t.risk)}</td>
+        <td><input type="number" step="any" value="${t.result}" data-idx="${idx}" class="result-input" style="width:90px; padding:5px 8px;"></td>
+        <td style="color:${rVal>=0?'var(--green)':'var(--red)'}">${fmtN(rVal,2)}R</td><td>${t.session||'—'}</td>
+        <td><button class="exp-btn" data-exp="${idx}">Journal</button></td><td><button class="del-btn" data-del="${idx}">✕</button></td>
+      </tr>
+      <tr class="detail-row" id="detail-${idx}" style="display:none;"><td colspan="14">${renderDetailBlock(t, idx)}</td></tr>`;
+    });
+    tbody.innerHTML = rows;
+
+    $$('.result-input', tbody).forEach(inp=>inp.addEventListener('change', (e)=>{
+      const idx = parseInt(e.target.dataset.idx); trades[idx].result = parseFloat(e.target.value) || 0;
+      saveTrades(); renderDashboard(); renderDailyBanner(); renderLog();
+    }));
+    $$('.del-btn', tbody).forEach(btn=>btn.addEventListener('click', (e)=>{
+      const idx = parseInt(e.target.dataset.del); trades.splice(idx,1); saveTrades(); renderLog(); renderDashboard(); renderDailyBanner();
+    }));
+    $$('.exp-btn', tbody).forEach(btn=>btn.addEventListener('click', (e)=>{
+      const row = $('#detail-'+e.target.dataset.exp); row.style.display = row.style.display === 'none' ? 'table-row' : 'none';
+    }));
+    $$('.chip[data-cat="during"], .chip[data-cat="after"]', tbody).forEach(chip=>chip.addEventListener('click', ()=>{
+      const idx = parseInt(chip.dataset.idx), cat = chip.dataset.cat, key = chip.dataset.key;
+      trades[idx][cat] = trades[idx][cat] || {}; trades[idx][cat][key] = !trades[idx][cat][key];
+      saveTrades(); chip.classList.toggle('on-'+key, trades[idx][cat][key]);
+    }));
+  }
+
+  function renderDetailBlock(t, idx){
+    const cl = t.checklist || {};
+    const clItems = [['bias','Bias confirmed'],['session','Session valid'],['liquidity','Liquidity identified'],['setup','Setup valid']];
+    const clHtml = clItems.map(([k,l])=>`<div style="font-size:12px; color:var(--text-dim); margin-bottom:4px;">${cl[k]?'✓':'✕'} ${l}</div>`).join('');
+    const before = t.before||{};
+    const beforeHtml = ['fear','confidence','fomo'].map(k=>`<span class="chip ${before[k]?'on-'+k:''}" style="cursor:default;">${k.charAt(0).toUpperCase()+k.slice(1)}</span>`).join(' ');
+    const during = t.during||{};
+    const duringHtml = ['anxiety','movedStop','impatience'].map(k=>`<span class="chip ${during[k]?'on-'+k:''}" data-cat="during" data-key="${k}" data-idx="${idx}">${k==='movedStop'?'Moved Stop':k.charAt(0).toUpperCase()+k.slice(1)}</span>`).join(' ');
+    const after = t.after||{};
+    const afterHtml = ['revenge','satisfaction','frustration'].map(k=>`<span class="chip ${after[k]?'on-'+k:''}" data-cat="after" data-key="${k}" data-idx="${idx}">${k.charAt(0).toUpperCase()+k.slice(1)}</span>`).join(' ');
+    return `<div class="detail-grid">
+      <div><div class="detail-block-title">Setup / Liquidity / Time</div>
+        <div style="font-size:12px; color:var(--text-dim);">${t.setup||'—'}<br>${t.liquidity||'—'}<br>${t.time||'—'}</div>
+        <div class="detail-block-title" style="margin-top:12px;">Checklist</div>${clHtml}</div>
+      <div><div class="detail-block-title">Before</div><div class="chip-row">${beforeHtml}</div>
+        <div class="detail-block-title" style="margin-top:12px;">During (click to tag)</div><div class="chip-row">${duringHtml}</div></div>
+      <div><div class="detail-block-title">After (click to tag)</div><div class="chip-row">${afterHtml}</div></div>
+    </div>`;
+  }
+
+  /* ============ RENDER: FIRM RULES ============ */
+
+  function renderEOD(accountId){
+    const acc = state.accounts.find(a=>a.id===accountId); const r = acc.rules; const s = getStats(accountId);
+    const isTrailing = r.drawdownType && r.drawdownType.toLowerCase().startsWith('trail');
+    const isLucid = acc.firm === 'lucid';
+    const freezeThreshold = r.balance + 100;
+
+    const stats = [
+      {label:"Starting Balance", value: fmt$(r.balance)},
+      {label:"DD Buffer", value: fmt$(r.maxDrawdown)},
+      {label:"Type", value: r.drawdownType},
+      {label:"Current Floor", value: fmt$(s.drawdownFloor)},
+    ];
+    const statsHtml = `<div class="stat-strip" style="margin-bottom:18px;">${stats.map(st=>`<div class="stat"><div class="stat-label">${st.label}</div><div class="stat-value">${st.value}</div></div>`).join('')}</div>`;
+
+    let mech = [];
+    if(isTrailing){
+      mech.push("Floor trails your highest closing balance, not your current one — it only moves up.");
+      if(isLucid) mech.push(`On LucidFlex the floor freezes for good at ${fmt$(freezeThreshold)} (starting balance + $100) once equity clears it — no further trailing after that.`);
+      else mech.push("On MFFU the floor behaves differently after each payout — recheck the buffer manually post-withdrawal.");
+      mech.push("A losing day drops equity but the floor itself never moves down — breach happens only if equity falls through it.");
+    } else {
+      mech.push("Static floor — fixed at starting balance minus the DD buffer, for the life of the account.");
+    }
+    const mechHtml = `<div class="status-list">${mech.map(m=>`<div class="status-item"><div class="status-icon ok">•</div><div>${m}</div></div>`).join('')}</div>`;
+
+    $('#eod-panel').innerHTML = `
+      <div class="panel-head"><div class="panel-title"><span class="n">§2</span>EOD Drawdown</div><div class="panel-note">${acc.label} · ${acc.account} · ${FIRMS[acc.firm].label}</div></div>
+      ${statsHtml}${mechHtml}`;
+  }
+
+  function renderHiddenRules(accountId){
+    const acc = state.accounts.find(a=>a.id===accountId);
+    const panel = $('#hidden-rules-panel');
+    if(acc.firm === 'lucid'){
+      panel.innerHTML = `<div class="panel-head"><div class="panel-title"><span class="n">§3</span>LucidFlex — 7 Hidden Rules, Never Forget</div></div>
+        ${HIDDEN_RULES_LUCID.map((h,i)=>`<div class="hr-card"><div class="hr-num">${i+1}</div><div><div class="hr-title">${h.title}</div><div class="hr-desc">${h.desc}</div><div class="hr-rule">→ ${h.rule}</div></div></div>`).join('')}`;
+    } else {
+      panel.innerHTML = `<div class="panel-head"><div class="panel-title"><span class="n">§3</span>Hidden Rules — ${FIRMS[acc.firm].label}</div></div>
+        <div class="panel-note" style="margin-bottom:10px;">Full rule-by-rule breakdown not yet on file for this firm — confirmed differences vs LucidFlex are in the comparison table below.</div>`;
+    }
+  }
+
+  function renderFirmRulesPanel(){
+    // Shows rules for whichever firms you actually have accounts under right now — not hardcoded to two.
+    const firmsInUse = [...new Set(state.accounts.map(a=>a.firm))];
+    const rows = [
+      ["Inactivity","inactivity"], ["Live transfer cap","liveTransfer"], ["Payout cap rule","payoutCap"],
+      ["Post-payout buffer","postPayout"], ["Hedging","hedging"], ["CME circuit breaker","circuitBreaker"], ["News rule","news"],
+    ];
+    const cols = firmsInUse.map(f => FIRM_META[f] || { label: (FIRMS[f]?FIRMS[f].label:f), notOnFile:true });
+
+    const title = cols.length > 1 ? `${cols.map(c=>c.label).join(' vs ')} — Key Differences` : `${cols[0].label} — Rules Reference`;
+    const missing = cols.filter(c=>c.notOnFile).map(c=>c.label);
+    const noteHtml = missing.length ? `<div class="panel-note" style="margin-bottom:10px;">Rules not confirmed yet for: ${missing.join(', ')}. Tell me the rules for this firm and I'll add them here.</div>` : '';
+
+    const headHtml = '<th>Rule</th>' + cols.map(c=>`<th>${c.label}</th>`).join('');
+    const bodyHtml = rows.map(([label,key]) =>
+      `<tr><td>${label}</td>${cols.map(c=>`<td>${c.notOnFile ? '—' : c[key]}</td>`).join('')}</tr>`
+    ).join('');
+
+    $('#firm-rules-panel').innerHTML =
+      `<div class="panel-head"><div class="panel-title"><span class="n">§4</span>${title}</div></div>${noteHtml}` +
+      `<table class="log" style="width:100%;"><thead><tr>${headHtml}</tr></thead><tbody>${bodyHtml}</tbody></table>`;
+  }
+
+  function renderRulesTab(){
+    if(!rulesViewAccountId) rulesViewAccountId = state.activeAccountId;
+    renderEOD(rulesViewAccountId);
+    renderHiddenRules(rulesViewAccountId);
+    renderFirmRulesPanel();
+  }
+
+  /* ============ RENDER: SETUP / ACC SETTINGS ============ */
+
+  function accountCardHtml(acc){
+    const isActive = acc.id === state.activeAccountId;
+    const firmOpts = Object.keys(FIRMS).map(k=>`<option value="${k}" ${k===acc.firm?'selected':''}>${FIRMS[k].label}</option>`).join('');
+    const accOpts = Object.keys(FIRMS[acc.firm].accounts).map(k=>`<option value="${k}" ${k===acc.account?'selected':''}>${k}</option>`).join('');
+    const ruleRows = RULE_FIELDS.map(([key,label])=>`<tr><td class="k">${label}</td><td><input type="text" data-rule="${key}" data-acc="${acc.id}" value="${acc.rules[key]}"></td></tr>`).join('');
+    return `<div class="account-card" data-acc-id="${acc.id}">
+      <div class="account-card-head">
+        <input type="text" class="acc-label" data-acc="${acc.id}" value="${acc.label}">
+        <div class="card-actions">
+          <div class="toggle-group" style="width:180px;">
+            <div class="toggle-opt phase-opt ${acc.phase==='evaluation'?'active':''}" data-phase="evaluation" data-acc="${acc.id}">EVAL</div>
+            <div class="toggle-opt phase-opt ${acc.phase==='funded'?'active':''}" data-phase="funded" data-acc="${acc.id}">FUNDED</div>
+          </div>
+          ${isActive ? '<span class="active-badge">ACTIVE</span>' : `<button class="btn-ghost btn-set-active" data-acc="${acc.id}">Set Active</button>`}
+          <button class="btn-danger btn-del-account" data-acc="${acc.id}">Delete</button>
+        </div>
+      </div>
+      <div class="grid3">
+        <div class="field"><label>Prop Firm</label><select class="acc-firm" data-acc="${acc.id}">${firmOpts}</select></div>
+        <div class="field"><label>Account Size</label><select class="acc-account" data-acc="${acc.id}">${accOpts}</select></div>
+        <div class="field"><label>Risk Mode</label>
+          <div class="toggle-group">
+            <div class="toggle-opt ${acc.riskMode==='fixed'?'active':''}" data-risk="fixed" data-acc="${acc.id}">FIXED $</div>
+            <div class="toggle-opt ${acc.riskMode==='percent'?'active':''}" data-risk="percent" data-acc="${acc.id}">% BAL</div>
+          </div>
+        </div>
+      </div>
+      <div class="grid2">
+        <div class="field"><label>Risk Per Trade ${acc.riskMode==='fixed'?'($)':'(% of balance)'}</label>
+          <input type="number" class="acc-risk-value" data-acc="${acc.id}" step="any" value="${acc.riskValue}"></div>
+        <div class="field"><label>Account ID / Alias (broker login, optional)</label>
+          <input type="text" class="acc-alias" data-acc="${acc.id}" value="${acc.alias||''}" placeholder="e.g. LFX-100234"></div>
+      </div>
+      <table class="rule-table">${ruleRows}</table>
+    </div>`;
+  }
+
+  function renderSetupTab(){
+    $('#accounts-list').innerHTML = state.accounts.map(accountCardHtml).join('');
+    bindAccountCardEvents();
+  }
+
+  function quickAddAccount(firm, accKey){
+    const count = state.accounts.filter(a=>a.firm===firm && a.account===accKey).length;
+    const label = `${FIRMS[firm].label.split(' ')[0]} ${accKey}${count?' #'+(count+1):''}`;
+    state.accounts.push(defaultAccount(uid(), label, firm, accKey));
+    renderSetupTab(); populateAcctSwitchers(); saveState();
+  }
+
+  function bindAccountCardEvents(){
+    const list = $('#accounts-list');
+    $$('.acc-label', list).forEach(inp=>inp.addEventListener('change', e=>{ const acc = state.accounts.find(a=>a.id===e.target.dataset.acc); acc.label = e.target.value || acc.label; populateAcctSwitchers(); }));
+    $$('.acc-firm', list).forEach(sel=>sel.addEventListener('change', e=>{
+      const acc = state.accounts.find(a=>a.id===e.target.dataset.acc); acc.firm = e.target.value;
+      acc.account = Object.keys(FIRMS[acc.firm].accounts)[0]; acc.rules = JSON.parse(JSON.stringify(FIRMS[acc.firm].accounts[acc.account])); renderSetupTab();
+    }));
+    $$('.acc-account', list).forEach(sel=>sel.addEventListener('change', e=>{
+      const acc = state.accounts.find(a=>a.id===e.target.dataset.acc); acc.account = e.target.value;
+      acc.rules = JSON.parse(JSON.stringify(FIRMS[acc.firm].accounts[acc.account])); renderSetupTab();
+    }));
+    $$('.toggle-opt[data-risk]', list).forEach(el=>el.addEventListener('click', e=>{ const acc = state.accounts.find(a=>a.id===e.target.dataset.acc); acc.riskMode = e.target.dataset.risk; renderSetupTab(); }));
+    $$('.toggle-opt[data-phase]', list).forEach(el=>el.addEventListener('click', e=>{
+      const acc = state.accounts.find(a=>a.id===e.target.dataset.acc); acc.phase = e.target.dataset.phase; renderSetupTab(); renderDashboard(); renderRulesTab();
+    }));
+    $$('.acc-risk-value', list).forEach(inp=>inp.addEventListener('change', e=>{ const acc = state.accounts.find(a=>a.id===e.target.dataset.acc); acc.riskValue = parseFloat(e.target.value) || 0; }));
+    $$('.acc-alias', list).forEach(inp=>inp.addEventListener('change', e=>{ const acc = state.accounts.find(a=>a.id===e.target.dataset.acc); acc.alias = e.target.value.trim(); populateAcctSwitchers(); }));
+    $$('[data-rule]', list).forEach(inp=>inp.addEventListener('change', e=>{
+      const acc = state.accounts.find(a=>a.id===e.target.dataset.acc); const key = e.target.dataset.rule; const isNumeric = key !== 'drawdownType';
+      acc.rules[key] = isNumeric ? (parseFloat(e.target.value)||0) : e.target.value;
+    }));
+    $$('.btn-set-active', list).forEach(btn=>btn.addEventListener('click', e=>{
+      state.activeAccountId = e.target.dataset.acc; renderSetupTab(); populateAcctSwitchers(); renderDashboard(); renderCalcAccountDependents();
+    }));
+    $$('.btn-del-account', list).forEach(btn=>btn.addEventListener('click', e=>{
+      if(state.accounts.length <= 1){ alert('At least one account is required.'); return; }
+      if(!confirm('Delete this account? Its rule settings will be lost (trade history stays in the log).')) return;
+      const id = e.target.dataset.acc; state.accounts = state.accounts.filter(a=>a.id!==id);
+      if(state.activeAccountId === id) state.activeAccountId = state.accounts[0].id;
+      renderSetupTab(); populateAcctSwitchers(); renderDashboard(); renderCalcAccountDependents();
+    }));
+  }
+
+  /* ============ RENDER ALL ============ */
+  function renderAll(){ renderDashboard(); renderDailyBanner(); resetJournalForm(); runCalculator(); renderLog(); renderRulesTab(); }
+
+  /* ============ EVENTS ============ */
+
+  $$('.nav-item').forEach(item=>item.addEventListener('click', ()=>{
+    $$('.nav-item').forEach(i=>i.classList.remove('active')); item.classList.add('active');
+    $$('.tab-content').forEach(t=>t.classList.remove('active')); $('#tab-'+item.dataset.tab).classList.add('active');
+    if(item.dataset.tab === 'dashboard') renderDashboard();
+    if(item.dataset.tab === 'calculator') renderCalcAccountDependents();
+    if(item.dataset.tab === 'log') renderLog();
+    if(item.dataset.tab === 'rules') renderRulesTab();
+    if(item.dataset.tab === 'setup') renderSetupTab();
+  }));
+
+  $$('.toggle-opt[data-dir]').forEach(el=>el.addEventListener('click', ()=>{
+    $$('.toggle-opt[data-dir]').forEach(o=>o.classList.remove('active')); el.classList.add('active');
+    calcState.direction = el.dataset.dir; saveState(); runCalculator();
+  }));
+  $$('.toggle-opt[data-size]').forEach(el=>el.addEventListener('click', ()=>{
+    $$('.toggle-opt[data-size]').forEach(o=>o.classList.remove('active')); el.classList.add('active');
+    calcState.sizeMode = el.dataset.size; $('#manual-contracts-field').style.display = calcState.sizeMode==='manual' ? 'block':'none';
+    saveState(); runCalculator();
+  }));
+  ['calc-instrument','calc-entry','calc-sl','calc-tp','calc-manual-contracts'].forEach(id=>$('#'+id).addEventListener('input', runCalculator));
+
+  $$('#before-chips .chip').forEach(chip=>chip.addEventListener('click', ()=>{ beforeTags[chip.dataset.key] = !beforeTags[chip.dataset.key]; renderBeforeChips(); }));
+  ['chk-bias','chk-session','chk-liquidity','chk-setup','chk-override'].forEach(id=>$('#'+id).addEventListener('change', updateLogButtonState));
+
+  $('#btn-log-trade').addEventListener('click', ()=>{
+    const r = lastCalcResult;
+    if(!r){ alert('Enter a valid Entry and Stop Loss first — nothing to log yet.'); return; }
+    const acc = getActiveAccount();
+    trades.push({
+      date: todayStr(), time: $('#jr-time').value || new Date().toTimeString().slice(0,8), accountId: acc.id,
+      instrument: r.key, direction: r.direction, entry: r.entry, sl: r.sl, tp: r.tp, contracts: r.contracts, risk: r.actualRisk, result: 0,
+      session: $('#jr-session').value, setup: $('#jr-setup').value, liquidity: $('#jr-liquidity').value,
+      checklist: { bias:$('#chk-bias').checked, session:$('#chk-session').checked, liquidity:$('#chk-liquidity').checked, setup:$('#chk-setup').checked },
+      before: {...beforeTags}, during:{anxiety:false, movedStop:false, impatience:false}, after:{revenge:false, satisfaction:false, frustration:false},
+    });
+    saveTrades(); renderLog(); renderDashboard(); renderDailyBanner(); renderCalcAccountDependents();
+    $('#calc-entry').value=''; $('#calc-sl').value=''; $('#calc-tp').value=''; resetJournalForm(); runCalculator();
+  });
+
+  $('#btn-add-account').addEventListener('click', ()=>{ state.accounts.push(defaultAccount(uid(), 'New Account', 'custom', 'Custom')); renderSetupTab(); populateAcctSwitchers(); saveState(); });
+  $$('.btn-quick-add').forEach(btn=>btn.addEventListener('click', ()=>quickAddAccount(btn.dataset.firm, btn.dataset.size)));
+  $('#btn-save-setup').addEventListener('click', ()=>{
+    saveState(); const flash = $('#save-flash'); flash.classList.add('show'); setTimeout(()=>flash.classList.remove('show'), 1600);
+    populateAcctSwitchers(); renderDashboard(); renderCalcAccountDependents(); renderRulesTab();
+  });
+  $('#btn-reset-log').addEventListener('click', ()=>{
+    if(!confirm('Clear all logged trades? This cannot be undone.')) return;
+    trades = []; saveTrades(); renderLog(); renderDashboard(); renderDailyBanner();
+  });
+
+  /* ============ LIVE TIME (real-time, updates every second) ============ */
+
+  let jrTimeAuto = true;
+  function startLiveTimeClock(){
+    const input = $('#jr-time');
+    if(!input) return;
+    input.addEventListener('focus', ()=>{ jrTimeAuto = false; });
+    input.addEventListener('change', ()=>{ jrTimeAuto = false; });
+    setInterval(()=>{
+      if(jrTimeAuto && input){ input.value = new Date().toTimeString().slice(0,8); }
+    }, 1000);
+  }
+
+  /* ============ INIT ============ */
+  initAuth();
+
+})();
+</script>
+</body>
+</html>
