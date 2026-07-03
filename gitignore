@@ -1,0 +1,13 @@
+# OS junk
+.DS_Store
+Thumbs.db
+
+# Editor junk
+.vscode/
+.idea/
+*.swp
+
+# In case build tooling gets added later
+node_modules/
+.env
+.env.local
